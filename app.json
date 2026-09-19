@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Memento",
+    "slug": "memento",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "web": { "bundler": "metro" }
+  }
+}

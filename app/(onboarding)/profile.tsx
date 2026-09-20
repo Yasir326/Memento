@@ -18,6 +18,8 @@ import { radius, space } from '@/design/tokens';
 import { type } from '@/design/typography';
 import { useOnboardingStore } from '@/store/onboarding';
 import { updateUserSettings } from '@/repositories/userSettings';
+import { todayPlain } from '@/domain/dates';
+import { wholeYearsBetween } from '@/domain/lifeState';
 
 const HORIZON_OPTIONS = [80, 85, 90] as const;
 
@@ -47,16 +49,7 @@ export default function Profile() {
 
   const currentAge = useMemo(() => {
     if (!birthDate) return null;
-    const today = new Date();
-    const age =
-      today.getUTCFullYear() -
-      birthDateObj.getUTCFullYear() -
-      (today.getUTCMonth() < birthDateObj.getUTCMonth() ||
-      (today.getUTCMonth() === birthDateObj.getUTCMonth() &&
-        today.getUTCDate() < birthDateObj.getUTCDate())
-        ? 1
-        : 0);
-    return age;
+    return wholeYearsBetween(birthDateObj, todayPlain());
   }, [birthDate, birthDateObj]);
 
   const projectionInvalid = currentAge != null && currentAge >= projectedAge;

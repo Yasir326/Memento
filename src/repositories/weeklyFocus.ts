@@ -46,6 +46,32 @@ export type CreateFocusInput = {
   text: string;
 };
 
+/**
+ * One focus per week. Re-setting it replaces the existing row rather than
+ * stacking a second one, so `getFocusForWeek` can never return a stale
+ * answer and the reflection flow has exactly one thing to close out.
+ */
+export async function setFocusForWeek(input: CreateFocusInput): Promise<WeeklyFocus> {
+  const db = await getDb();
+  const existing = await getFocusForWeek(input.weekStartDate);
+  if (existing) {
+    await db.runAsync(
+      'UPDATE weekly_focus SET text = ?, goal_id = ? WHERE id = ?',
+      [input.text, input.goalId ?? null, existing.id],
+    );
+    return { ...existing, text: input.text, goalId: input.goalId ?? null };
+  }
+  return createFocus(input);
+}
+
+export async function completeFocus(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE weekly_focus SET completed_at = ? WHERE id = ?', [
+    new Date().toISOString(),
+    id,
+  ]);
+}
+
 export async function createFocus(input: CreateFocusInput): Promise<WeeklyFocus> {
   const db = await getDb();
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;

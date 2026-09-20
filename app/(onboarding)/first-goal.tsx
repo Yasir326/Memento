@@ -16,24 +16,22 @@ import { theme } from '@/design/theme';
 import { radius, space } from '@/design/tokens';
 import { type } from '@/design/typography';
 import { computeGoalTargetDate, useOnboardingStore } from '@/store/onboarding';
-import { weeksBetween } from '@/domain/dates';
+import {
+  addMonths,
+  plainFromISO,
+  toISODate,
+  toLocalMidnightInstant,
+  toPlainDate,
+  todayPlain,
+  weeksBetween,
+} from '@/domain/dates';
+import { formatTargetDate } from '@/domain/goalTimeline';
 
 const TIMEFRAMES: Array<{ months: number; label: string }> = [
   { months: 3, label: '3 months' },
   { months: 6, label: '6 months' },
   { months: 12, label: '1 year' },
 ];
-
-const parseIso = (iso: string): Date => {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
-};
-
-const formatDisplay = (d: Date): string =>
-  d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
-
-const toIso = (d: Date): string =>
-  `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 
 export default function FirstGoal() {
   const router = useRouter();
@@ -47,10 +45,10 @@ export default function FirstGoal() {
 
   const draft = useOnboardingStore((s) => s);
   const targetDateIso = useMemo(() => computeGoalTargetDate(draft), [draft]);
-  const targetDate = targetDateIso ? parseIso(targetDateIso) : null;
-  const weeksToTarget = targetDate ? weeksBetween(new Date(), targetDate) : 0;
+  const targetDate = targetDateIso ? plainFromISO(targetDateIso) : null;
+  const weeksToTarget = targetDate ? weeksBetween(todayPlain(), targetDate) : 0;
 
-  const goalDateInPast = targetDate != null && targetDate.getTime() < startOfToday().getTime();
+  const goalDateInPast = targetDate != null && targetDate.getTime() < todayPlain().getTime();
 
   const canContinue = goalTitle.trim().length > 0 && targetDateIso != null && !goalDateInPast;
 
@@ -104,7 +102,7 @@ export default function FirstGoal() {
         >
           <Text style={styles.customBtnText}>
             {goalTimeframeMonths === 'custom' && goalCustomDate
-              ? formatDisplay(parseIso(goalCustomDate))
+              ? formatTargetDate(plainFromISO(goalCustomDate))
               : 'Custom date'}
           </Text>
           <Text style={styles.chevron}>›</Text>
@@ -115,11 +113,14 @@ export default function FirstGoal() {
             <DateTimePicker
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              value={goalCustomDate ? parseIso(goalCustomDate) : addMonths(new Date(), 6)}
-              minimumDate={new Date()}
+              value={toLocalMidnightInstant(
+                goalCustomDate ? plainFromISO(goalCustomDate) : addMonths(todayPlain(), 6),
+              )}
+              minimumDate={toLocalMidnightInstant(todayPlain())}
               onChange={(_, selected) => {
                 if (Platform.OS !== 'ios') setShowCustomPicker(false);
-                if (selected) patch({ goalCustomDate: toIso(selected) });
+                // The picker returns a local instant; store the calendar day.
+                if (selected) patch({ goalCustomDate: toISODate(toPlainDate(selected)) });
               }}
               themeVariant="dark"
               textColor={theme.colors.text}
@@ -157,15 +158,6 @@ export default function FirstGoal() {
       </View>
     </OnboardingScreen>
   );
-}
-
-function addMonths(d: Date, months: number): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, d.getUTCDate()));
-}
-
-function startOfToday(): Date {
-  const n = new Date();
-  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
 }
 
 const styles = StyleSheet.create({

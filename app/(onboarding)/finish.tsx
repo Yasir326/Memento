@@ -17,7 +17,7 @@ import { computeGoalTargetDate, useOnboardingStore } from '@/store/onboarding';
 import { updateUserSettings } from '@/repositories/userSettings';
 import { createGoal } from '@/repositories/goals';
 import { createFocus } from '@/repositories/weeklyFocus';
-import { startOfWeek } from '@/domain/dates';
+import { currentWeekStart, toISODate } from '@/domain/dates';
 
 export default function Finish() {
   const router = useRouter();
@@ -39,8 +39,7 @@ export default function Finish() {
         targetDate,
       });
 
-      const week = startOfWeek(new Date(), 1);
-      const weekIso = `${week.getUTCFullYear()}-${String(week.getUTCMonth() + 1).padStart(2, '0')}-${String(week.getUTCDate()).padStart(2, '0')}`;
+      const weekIso = toISODate(currentWeekStart(1));
 
       await createFocus({
         weekStartDate: weekIso,

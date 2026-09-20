@@ -80,7 +80,7 @@ export async function createGoal(input: CreateGoalInput): Promise<Goal> {
   const active = await db.getFirstAsync<{ count: number }>(
     "SELECT COUNT(*) as count FROM goals WHERE status = 'active'",
   );
-  if ((active?.count ?? 0) >= 3) {
+  if ((active?.count ?? 0) >= MAX_ACTIVE_GOALS) {
     throw new Error('Maximum of three active goals');
   }
 
@@ -96,6 +96,75 @@ export async function createGoal(input: CreateGoalInput): Promise<Goal> {
 
   const created = await db.getFirstAsync<Row>('SELECT * FROM goals WHERE id = ?', [id]);
   return rowToGoal(created!);
+}
+
+export async function getGoal(id: string): Promise<Goal | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<Row>('SELECT * FROM goals WHERE id = ?', [id]);
+  return row ? rowToGoal(row) : null;
+}
+
+export async function countActiveGoals(): Promise<number> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ count: number }>(
+    "SELECT COUNT(*) as count FROM goals WHERE status = 'active'",
+  );
+  return row?.count ?? 0;
+}
+
+/** The doc's hard limit, exposed so UI can show "2 of 3 active" without guessing. */
+export const MAX_ACTIVE_GOALS = 3;
+
+/**
+ * Move a goal between statuses. Completing or archiving frees a slot, which
+ * is the only sanctioned way past the three-goal limit (doc §08). Reopening
+ * an archived goal re-checks the limit so the cap can't be dodged.
+ */
+export async function setGoalStatus(id: string, status: GoalStatus): Promise<void> {
+  const db = await getDb();
+  if (status === 'active') {
+    const current = await getGoal(id);
+    if (current && current.status !== 'active') {
+      const active = await countActiveGoals();
+      if (active >= MAX_ACTIVE_GOALS) {
+        throw new Error('Maximum of three active goals');
+      }
+    }
+  }
+  await db.runAsync('UPDATE goals SET status = ?, updated_at = ? WHERE id = ?', [
+    status,
+    new Date().toISOString(),
+    id,
+  ]);
+}
+
+/** Manual progress, 0..1. Clamped here so no caller can store a bad value. */
+export async function setGoalProgress(id: string, value: number): Promise<void> {
+  const db = await getDb();
+  const clamped = Math.max(0, Math.min(1, value));
+  await db.runAsync(
+    'UPDATE goals SET progress_value = ?, updated_at = ? WHERE id = ?',
+    [clamped, new Date().toISOString(), id],
+  );
+}
+
+export type UpdateGoalInput = Partial<Pick<Goal, 'title' | 'reason' | 'targetDate'>>;
+
+export async function updateGoal(id: string, input: UpdateGoalInput): Promise<void> {
+  const entries = Object.entries(input).filter(([, v]) => v !== undefined);
+  if (entries.length === 0) return;
+  const columns: Record<string, string> = {
+    title: 'title',
+    reason: 'reason',
+    targetDate: 'target_date',
+  };
+  const db = await getDb();
+  const assignments = entries.map(([k]) => `${columns[k]} = ?`).join(', ');
+  const values = entries.map(([, v]) => v as string | null);
+  await db.runAsync(
+    `UPDATE goals SET ${assignments}, updated_at = ? WHERE id = ?`,
+    [...values, new Date().toISOString(), id],
+  );
 }
 
 // Simple non-crypto ID — good enough for local rows. If we ever add sync,

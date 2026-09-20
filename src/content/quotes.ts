@@ -11,6 +11,8 @@
 // cited source (or a widely accepted public-domain translation). Anything
 // unverified should either be sourced properly before shipping or removed.
 
+import { daysBetween, toPlainDate } from '@/domain/dates';
+
 export type Quote = {
   id: string;
   text: string;
@@ -68,11 +70,11 @@ export const quotes: Quote[] = [
  * across cold-launches, so the home screen doesn't feel unstable. Uses the
  * day-of-year modulo the pool size.
  */
-export function pickDailyQuote(today: Date = new Date(), pool: Quote[] = quotes): Quote {
-  const start = new Date(Date.UTC(today.getUTCFullYear(), 0, 1));
-  const dayOfYear = Math.floor(
-    (Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) - start.getTime()) /
-      86_400_000,
-  );
+export function pickDailyQuote(now: Date = new Date(), pool: Quote[] = quotes): Quote {
+  // Local calendar day, so the quote turns over at the user's midnight
+  // rather than at UTC midnight.
+  const today = toPlainDate(now);
+  const jan1 = new Date(Date.UTC(today.getUTCFullYear(), 0, 1));
+  const dayOfYear = daysBetween(jan1, today);
   return pool[dayOfYear % pool.length];
 }

@@ -7,8 +7,8 @@
 // the paywall (per your session ask — paywall shown after the grid). Paywall
 // then routes on into life-areas / first-goal regardless of trial choice.
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -19,7 +19,7 @@ import Animated, {
 import { useRouter } from 'expo-router';
 import { OnboardingScreen } from '@/features/onboarding/OnboardingScreen';
 import { PrimaryButton } from '@/features/onboarding/PrimaryButton';
-import { LifeGrid } from '@/features/time/LifeGrid';
+import { LifeGrid, useReduceMotion } from '@/features/time/LifeGrid';
 import { getLifeState } from '@/domain/lifeState';
 import { useOnboardingStore } from '@/store/onboarding';
 import { theme } from '@/design/theme';
@@ -30,13 +30,7 @@ export default function Reveal() {
   const router = useRouter();
   const birthDate = useOnboardingStore((s) => s.birthDate);
   const projectedAge = useOnboardingStore((s) => s.projectedAge);
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => sub.remove();
-  }, []);
+  const reduceMotion = useReduceMotion();
 
   const state = useMemo(() => {
     if (!birthDate) return null;
@@ -52,17 +46,29 @@ export default function Reveal() {
   const ctaOpacity = useSharedValue(reduceMotion ? 1 : 0);
 
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion) {
+      numberOpacity.value = 1;
+      captionOpacity.value = 1;
+      ctaOpacity.value = 1;
+      return;
+    }
     numberOpacity.value = withTiming(1, {
       duration: motion.completion,
       easing: Easing.out(Easing.cubic),
     });
-    // LifeGrid reveal cascades over ~2200 ms internally. Land the caption
-    // + CTA just after the last dot lands so the composition resolves as
-    // one motion.
-    captionOpacity.value = withDelay(2400, withTiming(1, { duration: motion.standard }));
-    ctaOpacity.value = withDelay(2600, withTiming(1, { duration: motion.standard }));
   }, [reduceMotion, numberOpacity, captionOpacity, ctaOpacity]);
+
+  // The caption and CTA land when the grid says it has finished, rather
+  // than on a delay hard-coded to match it. One source of truth for the
+  // reveal's length means changing REVEAL_DURATION_MS cannot desynchronise
+  // the composition — and under Reduce Motion the callback fires
+  // immediately, so the CTA is never gated behind an animation that is
+  // not running.
+  const handleGridRevealed = useCallback(() => {
+    if (reduceMotion) return;
+    captionOpacity.value = withTiming(1, { duration: motion.standard });
+    ctaOpacity.value = withDelay(140, withTiming(1, { duration: motion.standard }));
+  }, [reduceMotion, captionOpacity, ctaOpacity]);
 
   const aNumber = useAnimatedStyle(() => ({ opacity: numberOpacity.value }));
   const aCaption = useAnimatedStyle(() => ({ opacity: captionOpacity.value }));
@@ -94,10 +100,10 @@ export default function Reveal() {
         </Animated.View>
 
         <View style={styles.gridWrap}>
-          {/* LifeGrid handles the staggered per-wave dot fill internally
-              when reveal={true}. Wrapping in another Animated.View would
-              fight that with a whole-grid opacity. */}
-          <LifeGrid state={state} scale="life" reveal />
+          {/* LifeGrid runs the sequential fill internally when reveal is
+              set. Wrapping it in another Animated.View would fight that
+              with a whole-grid opacity. */}
+          <LifeGrid state={state} scale="life" reveal onRevealComplete={handleGridRevealed} />
         </View>
 
         <Animated.View style={aCaption}>

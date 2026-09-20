@@ -4,6 +4,7 @@
 // itself is scratch memory.
 
 import { create } from 'zustand';
+import { addMonths, toISODate, todayPlain } from '@/domain/dates';
 
 export type OnboardingDraft = {
   // Step 2: Time setup
@@ -56,13 +57,8 @@ export function computeGoalTargetDate(draft: OnboardingDraft): string | null {
   if (draft.goalTimeframeMonths === 'custom') {
     return draft.goalCustomDate;
   }
-  const now = new Date();
-  const target = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth() + draft.goalTimeframeMonths,
-      now.getUTCDate(),
-    ),
-  );
-  return target.toISOString().slice(0, 10);
+  // addMonths clamps end-of-month overflow (31 Jan + 1 month lands on
+  // 28/29 Feb, not 2/3 Mar) and todayPlain reads the user's local calendar
+  // day rather than the UTC one.
+  return toISODate(addMonths(todayPlain(), draft.goalTimeframeMonths));
 }

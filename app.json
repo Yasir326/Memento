@@ -2,9 +2,49 @@
   "expo": {
     "name": "Memento",
     "slug": "memento",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
-    "web": { "bundler": "metro" }
+    "scheme": "memento",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0B0C",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "backgroundColor": "#0B0B0C",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "userInterfaceStyle": "dark",
+      "icon": "./assets/icon.png",
+      "infoPlist": {
+        "UIViewControllerBasedStatusBarAppearance": false
+      },
+      "bundleIdentifier": "com.anonymous.memento"
+    },
+    "android": {
+      "userInterfaceStyle": "dark",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/monochrome-icon.png",
+        "backgroundColor": "#0B0B0C"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0B0C",
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-asset",
+      "expo-sqlite",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }

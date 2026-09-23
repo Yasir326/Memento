@@ -1,12 +1,16 @@
 // Memento Pro paywall. Design per doc §07.
 //
+// Shown as the final onboarding step, after the grid, the first goal and
+// the weekly action exist — doc §06 step 8 and §07's end-of-onboarding
+// trigger. Also reachable later from Settings and contextual Pro gates.
+//
 // This session ships a UI stub — RevenueCat integration is a follow-up.
 // The stub sets isPro on UserSettings so the rest of the app can react
 // to it, and shows the same UI flows a real paywall would (loading,
 // success). Prices are hardcoded to the doc's launch test values; a real
 // build must load them from store product data.
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +20,7 @@ import { theme } from '@/design/theme';
 import { radius, space } from '@/design/tokens';
 import { type } from '@/design/typography';
 import { updateUserSettings } from '@/repositories/userSettings';
+import { useSession } from '@/store/session';
 
 const BENEFITS = [
   { label: '03', text: 'active goals with weekly focus' },
@@ -29,8 +34,25 @@ export default function Paywall() {
   const router = useRouter();
   const [selected, setSelected] = useState<Plan>('yearly');
   const [busy, setBusy] = useState(false);
+  const refreshSession = useSession((s) => s.refresh);
 
-  const proceed = () => router.replace('/(onboarding)/values');
+  // Marked on mount, not on choice. Dismissing by any route — trial, free,
+  // or the Android back button — has to count as shown, or the offer
+  // reappears on the next launch and turns into the nagging pattern §07's
+  // trust rules rule out.
+  useEffect(() => {
+    void (async () => {
+      await updateUserSettings({ paywallSeenAt: new Date().toISOString() });
+      await refreshSession();
+    })();
+  }, [refreshSession]);
+
+  // Raised over the home screen, so going back is the honest exit. Falls
+  // back to a replace when it was opened as the only route on the stack.
+  const proceed = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  };
 
   const onStartTrial = async () => {
     setBusy(true);
@@ -39,6 +61,7 @@ export default function Paywall() {
       // customer info refresh, then setting isPro. We simulate success.
       await new Promise((r) => setTimeout(r, 400));
       await updateUserSettings({ isPro: true });
+      await refreshSession();
       proceed();
     } finally {
       setBusy(false);

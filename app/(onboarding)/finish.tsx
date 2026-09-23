@@ -17,12 +17,14 @@ import { computeGoalTargetDate, useOnboardingStore } from '@/store/onboarding';
 import { updateUserSettings } from '@/repositories/userSettings';
 import { createGoal } from '@/repositories/goals';
 import { createFocus } from '@/repositories/weeklyFocus';
+import { useSession } from '@/store/session';
 import { currentWeekStart, toISODate } from '@/domain/dates';
 
 export default function Finish() {
   const router = useRouter();
   const draft = useOnboardingStore((s) => s);
   const reset = useOnboardingStore((s) => s.reset);
+  const refreshSession = useSession((s) => s.refresh);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +53,16 @@ export default function Finish() {
         onboardingCompletedAt: new Date().toISOString(),
       });
 
+      // Critical ordering: refresh the session cache BEFORE navigating.
+      // OnboardingGate reads onboardingCompletedAt from the store, so
+      // leaving here with a stale null bounces the user straight back to
+      // step one and the home screen renders blank behind it.
+      await refreshSession();
+
       reset();
+      // Doc §06 step 7: onboarding ends on the complete home screen. The
+      // upgrade offer (step 8) is raised from there, once the user has seen
+      // what they would be upgrading.
       router.replace('/');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');

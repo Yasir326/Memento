@@ -18,6 +18,7 @@ import { radius, space } from '@/design/tokens';
 import { type } from '@/design/typography';
 import { useOnboardingStore } from '@/store/onboarding';
 import { updateUserSettings } from '@/repositories/userSettings';
+import { useSession } from '@/store/session';
 import { todayPlain } from '@/domain/dates';
 import { wholeYearsBetween } from '@/domain/lifeState';
 
@@ -42,6 +43,8 @@ export default function Profile() {
   const projectedAge = useOnboardingStore((s) => s.projectedAge);
   const patch = useOnboardingStore((s) => s.patch);
 
+  const refreshSession = useSession((s) => s.refresh);
+  const completeStep = useOnboardingStore((s) => s.completeStep);
   const [showPicker, setShowPicker] = useState(Platform.OS === 'ios');
   const [saving, setSaving] = useState(false);
 
@@ -61,6 +64,9 @@ export default function Profile() {
     setSaving(true);
     try {
       await updateUserSettings({ birthDate, projectedAge });
+      // Every write to user_settings refreshes the cache — see session.ts.
+      await refreshSession();
+      completeStep('profile');
       router.push('/(onboarding)/reveal');
     } finally {
       setSaving(false);

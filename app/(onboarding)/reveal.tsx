@@ -3,9 +3,12 @@
 // Doc §06 says the reveal is NOT counted as setup work — no step indicator.
 // Reduce-motion users get an immediate render instead of the stagger.
 //
-// After the reveal completes, the user taps "Choose what matters" to go to
-// the paywall (per your session ask — paywall shown after the grid). Paywall
-// then routes on into life-areas / first-goal regardless of trial choice.
+// After the reveal, "Choose what matters" leads into goal setting. The
+// paywall comes at the END of onboarding, per doc §06 (step 8 Upgrade:
+// "offer after the user has seen the grid and created value") and §07
+// ("show once after the grid, first goal, and weekly action"). Selling
+// three active goals to someone who has not made one yet asks them to
+// value something they have not seen.
 
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -19,7 +22,7 @@ import Animated, {
 import { useRouter } from 'expo-router';
 import { OnboardingScreen } from '@/features/onboarding/OnboardingScreen';
 import { PrimaryButton } from '@/features/onboarding/PrimaryButton';
-import { LifeGrid, useReduceMotion } from '@/features/time/LifeGrid';
+import { LifeGrid, REVEAL_DURATION_MS, useReduceMotion } from '@/features/time/LifeGrid';
 import { getLifeState } from '@/domain/lifeState';
 import { useOnboardingStore } from '@/store/onboarding';
 import { theme } from '@/design/theme';
@@ -30,7 +33,13 @@ export default function Reveal() {
   const router = useRouter();
   const birthDate = useOnboardingStore((s) => s.birthDate);
   const projectedAge = useOnboardingStore((s) => s.projectedAge);
+  const completeStep = useOnboardingStore((s) => s.completeStep);
   const reduceMotion = useReduceMotion();
+
+  const onContinue = () => {
+    completeStep('reveal');
+    router.push('/(onboarding)/values');
+  };
 
   const state = useMemo(() => {
     if (!birthDate) return null;
@@ -68,6 +77,20 @@ export default function Reveal() {
     if (reduceMotion) return;
     captionOpacity.value = withTiming(1, { duration: motion.standard });
     ctaOpacity.value = withDelay(140, withTiming(1, { duration: motion.standard }));
+  }, [reduceMotion, captionOpacity, ctaOpacity]);
+
+  // Safety net. The CTA is the only way off this screen, so it must never
+  // be gated solely on an animation callback: if the reveal is interrupted
+  // — remount, a cancelled animation, anything that swallows the callback —
+  // an invisible button would strand the user here with no back path.
+  // Worst case this fires first and the button simply appears on time.
+  useEffect(() => {
+    if (reduceMotion) return;
+    const t = setTimeout(() => {
+      captionOpacity.value = withTiming(1, { duration: motion.standard });
+      ctaOpacity.value = withTiming(1, { duration: motion.standard });
+    }, REVEAL_DURATION_MS + 900);
+    return () => clearTimeout(t);
   }, [reduceMotion, captionOpacity, ctaOpacity]);
 
   const aNumber = useAnimatedStyle(() => ({ opacity: numberOpacity.value }));
@@ -116,7 +139,7 @@ export default function Reveal() {
         <Animated.View style={aCta}>
           <PrimaryButton
             label="Choose what matters"
-            onPress={() => router.push('/(paywall)')}
+            onPress={onContinue}
           />
         </Animated.View>
       </View>

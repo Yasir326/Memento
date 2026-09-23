@@ -21,8 +21,8 @@ import {
 } from '@expo-google-fonts/manrope';
 import { SourceSerif4_400Regular_Italic } from '@expo-google-fonts/source-serif-4';
 import { theme } from '@/design/theme';
-import { getUserSettings } from '@/repositories/userSettings';
 import { useSession } from '@/store/session';
+import { resumeRoute, useOnboardingStore } from '@/store/onboarding';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -36,37 +36,40 @@ export default function RootLayout() {
   });
 
   const ready = useSession((s) => s.ready);
-  const setSettings = useSession((s) => s.setSettings);
+  const refreshSession = useSession((s) => s.refresh);
   const markReady = useSession((s) => s.markReady);
+  // The persisted onboarding draft is read asynchronously; routing must not
+  // run against an empty draft or every resume starts at the intro.
+  const draftHydrated = useOnboardingStore((s) => s.hasHydrated);
 
   // Bootstrap: read the user's settings row (created by migrations) so the
-  // gate below can decide where to route them.
+  // gate below can decide where to route them. Uses the store's own refresh
+  // so there is exactly one place that loads this row.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const s = await getUserSettings();
-        if (!cancelled) setSettings(s);
-      } catch (e) {
-        // Migrations may still be running on first launch. A retry loop
-        // here is overkill for MVP — the error surfaces in Metro logs.
-        if (!cancelled) setSettings(null);
-      } finally {
-        if (!cancelled) markReady();
+      let loaded = await refreshSession();
+      // On a cold first launch migrations may still be creating the row.
+      // One retry costs nothing and avoids booting into a blank screen
+      // with no way forward, since the gate cannot route on null settings.
+      if (!loaded && !cancelled) {
+        await new Promise((r) => setTimeout(r, 300));
+        if (!cancelled) loaded = await refreshSession();
       }
+      if (!cancelled) markReady();
     })();
     return () => {
       cancelled = true;
     };
-  }, [setSettings, markReady]);
+  }, [refreshSession, markReady]);
 
   const onLayout = useCallback(() => {
-    if ((fontsLoaded || fontsError) && ready) {
+    if ((fontsLoaded || fontsError) && ready && draftHydrated) {
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, fontsError, ready]);
+  }, [fontsLoaded, fontsError, ready, draftHydrated]);
 
-  if ((!fontsLoaded && !fontsError) || !ready) return null;
+  if ((!fontsLoaded && !fontsError) || !ready || !draftHydrated) return null;
 
   return (
     <SafeAreaProvider>
@@ -86,24 +89,28 @@ export default function RootLayout() {
 }
 
 /**
- * Redirect gate — reads the loaded settings and pushes the user into
- * onboarding if they haven't completed it yet. Runs on route changes so
- * users can't skip onboarding by manually navigating to a deep link.
+ * Redirect gate — sends anyone who has not finished setup back into it, at
+ * the step they left off rather than the beginning (doc §06: "resume at the
+ * last completed step with prior answers restored").
+ *
+ * Only acts from outside the onboarding and paywall groups, so it redirects
+ * on app entry without fighting navigation inside the flow — including the
+ * back chevron, which users are allowed to use on every step.
  */
 function OnboardingGate() {
   const router = useRouter();
   const segments = useSegments();
   const settings = useSession((s) => s.settings);
+  const hasHydrated = useOnboardingStore((s) => s.hasHydrated);
+  const lastCompletedStep = useOnboardingStore((s) => s.lastCompletedStep);
 
   useEffect(() => {
-    if (!settings) return;
-    const inOnboarding = segments[0] === '(onboarding)';
-    const inPaywall = segments[0] === '(paywall)';
-    const completed = !!settings.onboardingCompletedAt;
-    if (!completed && !inOnboarding && !inPaywall) {
-      router.replace('/(onboarding)/intro');
-    }
-  }, [settings, segments, router]);
+    if (!settings || !hasHydrated) return;
+    const group = segments[0];
+    if (group === '(onboarding)' || group === '(paywall)') return;
+    if (settings.onboardingCompletedAt) return;
+    router.replace(resumeRoute(lastCompletedStep));
+  }, [settings, hasHydrated, lastCompletedStep, segments, router]);
 
   return null;
 }

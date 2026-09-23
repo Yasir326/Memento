@@ -1,5 +1,9 @@
 // Memento Pro paywall. Design per doc §07.
 //
+// Shown as the final onboarding step, after the grid, the first goal and
+// the weekly action exist — doc §06 step 8 and §07's end-of-onboarding
+// trigger. Also reachable later from Settings and contextual Pro gates.
+//
 // This session ships a UI stub — RevenueCat integration is a follow-up.
 // The stub sets isPro on UserSettings so the rest of the app can react
 // to it, and shows the same UI flows a real paywall would (loading,
@@ -16,6 +20,7 @@ import { theme } from '@/design/theme';
 import { radius, space } from '@/design/tokens';
 import { type } from '@/design/typography';
 import { updateUserSettings } from '@/repositories/userSettings';
+import { useSession } from '@/store/session';
 
 const BENEFITS = [
   { label: '03', text: 'active goals with weekly focus' },
@@ -29,8 +34,11 @@ export default function Paywall() {
   const router = useRouter();
   const [selected, setSelected] = useState<Plan>('yearly');
   const [busy, setBusy] = useState(false);
+  const refreshSession = useSession((s) => s.refresh);
 
-  const proceed = () => router.replace('/(onboarding)/values');
+  // Last step of onboarding: both paths land on the home screen, and the
+  // free path is never worse than a dead end (doc §07 rule 5).
+  const proceed = () => router.replace('/');
 
   const onStartTrial = async () => {
     setBusy(true);
@@ -39,6 +47,7 @@ export default function Paywall() {
       // customer info refresh, then setting isPro. We simulate success.
       await new Promise((r) => setTimeout(r, 400));
       await updateUserSettings({ isPro: true });
+      await refreshSession();
       proceed();
     } finally {
       setBusy(false);

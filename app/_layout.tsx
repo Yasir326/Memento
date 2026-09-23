@@ -21,7 +21,6 @@ import {
 } from '@expo-google-fonts/manrope';
 import { SourceSerif4_400Regular_Italic } from '@expo-google-fonts/source-serif-4';
 import { theme } from '@/design/theme';
-import { getUserSettings } from '@/repositories/userSettings';
 import { useSession } from '@/store/session';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -36,29 +35,29 @@ export default function RootLayout() {
   });
 
   const ready = useSession((s) => s.ready);
-  const setSettings = useSession((s) => s.setSettings);
+  const refreshSession = useSession((s) => s.refresh);
   const markReady = useSession((s) => s.markReady);
 
   // Bootstrap: read the user's settings row (created by migrations) so the
-  // gate below can decide where to route them.
+  // gate below can decide where to route them. Uses the store's own refresh
+  // so there is exactly one place that loads this row.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const s = await getUserSettings();
-        if (!cancelled) setSettings(s);
-      } catch (e) {
-        // Migrations may still be running on first launch. A retry loop
-        // here is overkill for MVP — the error surfaces in Metro logs.
-        if (!cancelled) setSettings(null);
-      } finally {
-        if (!cancelled) markReady();
+      let loaded = await refreshSession();
+      // On a cold first launch migrations may still be creating the row.
+      // One retry costs nothing and avoids booting into a blank screen
+      // with no way forward, since the gate cannot route on null settings.
+      if (!loaded && !cancelled) {
+        await new Promise((r) => setTimeout(r, 300));
+        if (!cancelled) loaded = await refreshSession();
       }
+      if (!cancelled) markReady();
     })();
     return () => {
       cancelled = true;
     };
-  }, [setSettings, markReady]);
+  }, [refreshSession, markReady]);
 
   const onLayout = useCallback(() => {
     if ((fontsLoaded || fontsError) && ready) {

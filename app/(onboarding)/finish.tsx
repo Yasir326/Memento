@@ -60,9 +60,10 @@ export default function Finish() {
       await refreshSession();
 
       reset();
-      // Doc §06 step 8 / §07: the upgrade offer is the last thing, once the
-      // grid, a goal and a weekly action all exist.
-      router.replace('/(paywall)');
+      // Doc §06 step 7: onboarding ends on the complete home screen. The
+      // upgrade offer (step 8) is raised from there, once the user has seen
+      // what they would be upgrading.
+      router.replace('/');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
     } finally {

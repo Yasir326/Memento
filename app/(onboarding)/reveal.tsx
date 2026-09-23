@@ -33,7 +33,13 @@ export default function Reveal() {
   const router = useRouter();
   const birthDate = useOnboardingStore((s) => s.birthDate);
   const projectedAge = useOnboardingStore((s) => s.projectedAge);
+  const completeStep = useOnboardingStore((s) => s.completeStep);
   const reduceMotion = useReduceMotion();
+
+  const onContinue = () => {
+    completeStep('reveal');
+    router.push('/(onboarding)/values');
+  };
 
   const state = useMemo(() => {
     if (!birthDate) return null;
@@ -133,7 +139,7 @@ export default function Reveal() {
         <Animated.View style={aCta}>
           <PrimaryButton
             label="Choose what matters"
-            onPress={() => router.push('/(onboarding)/values')}
+            onPress={onContinue}
           />
         </Animated.View>
       </View>

@@ -15,6 +15,10 @@ export type UserSettings = {
   lifeAreas: string[] | null;       // parsed from JSON in the DB
   isPro: boolean;
   onboardingCompletedAt: string | null;  // ISO datetime
+  /** Set the first time the upgrade offer is shown, so it is shown once. */
+  paywallSeenAt: string | null;
+  /** Set when the home screen's first-run explainer is dismissed. */
+  homeIntroSeenAt: string | null;
 };
 
 type Row = {
@@ -27,6 +31,8 @@ type Row = {
   life_areas: string | null;
   is_pro: number;
   onboarding_completed_at: string | null;
+  paywall_seen_at: string | null;
+  home_intro_seen_at: string | null;
 };
 
 function rowToSettings(r: Row): UserSettings {
@@ -40,6 +46,8 @@ function rowToSettings(r: Row): UserSettings {
     lifeAreas: r.life_areas ? JSON.parse(r.life_areas) : null,
     isPro: r.is_pro === 1,
     onboardingCompletedAt: r.onboarding_completed_at,
+    paywallSeenAt: r.paywall_seen_at ?? null,
+    homeIntroSeenAt: r.home_intro_seen_at ?? null,
   };
 }
 
@@ -65,6 +73,8 @@ export type PartialUpdate = Partial<{
   lifeAreas: string[] | null;
   isPro: boolean;
   onboardingCompletedAt: string | null;
+  paywallSeenAt: string | null;
+  homeIntroSeenAt: string | null;
 }>;
 
 const FIELD_MAP: Record<keyof PartialUpdate, string> = {
@@ -76,6 +86,8 @@ const FIELD_MAP: Record<keyof PartialUpdate, string> = {
   lifeAreas: 'life_areas',
   isPro: 'is_pro',
   onboardingCompletedAt: 'onboarding_completed_at',
+  paywallSeenAt: 'paywall_seen_at',
+  homeIntroSeenAt: 'home_intro_seen_at',
 };
 
 /**

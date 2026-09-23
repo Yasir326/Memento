@@ -56,4 +56,15 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_goals_status ON goals(status);
     `,
   },
+  {
+    // Onboarding now ends on the home screen, with the upgrade offer shown
+    // over it once (doc §06 steps 7-8). Both moments need a "already shown" marker
+    // so they never repeat: a paywall that returns on every launch is exactly
+    // what §07's trust rules rule out.
+    version: 2,
+    up: `
+      ALTER TABLE user_settings ADD COLUMN paywall_seen_at TEXT;
+      ALTER TABLE user_settings ADD COLUMN home_intro_seen_at TEXT;
+    `,
+  },
 ];

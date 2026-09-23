@@ -4,10 +4,12 @@
 //   - Ask only three things: what, when, why (the reason is optional).
 //   - Offer 3/6/12-month chips + custom date. Show the resulting weeks
 //     immediately so the user sees the projection.
-//   - Never force templates or AI generation for the goal.
+//   - Use the selected life areas to suggest examples, but never force
+//     templates or AI generation. Tapping an idea fills the field and
+//     nothing more; it stays editable and can be ignored.
 
 import React, { useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { OnboardingScreen } from '@/features/onboarding/OnboardingScreen';
@@ -16,6 +18,7 @@ import { theme } from '@/design/theme';
 import { radius, space } from '@/design/tokens';
 import { type } from '@/design/typography';
 import { computeGoalTargetDate, useOnboardingStore } from '@/store/onboarding';
+import { suggestionsForAreas } from '@/content/goalSuggestions';
 import {
   addMonths,
   plainFromISO,
@@ -39,7 +42,13 @@ export default function FirstGoal() {
   const goalTimeframeMonths = useOnboardingStore((s) => s.goalTimeframeMonths);
   const goalCustomDate = useOnboardingStore((s) => s.goalCustomDate);
   const goalReason = useOnboardingStore((s) => s.goalReason);
+  const lifeAreas = useOnboardingStore((s) => s.lifeAreas);
   const patch = useOnboardingStore((s) => s.patch);
+  const completeStep = useOnboardingStore((s) => s.completeStep);
+
+  // Empty when the user skipped the Direction step, which hides the whole
+  // section rather than falling back to generic ideas they did not ask for.
+  const suggestions = useMemo(() => suggestionsForAreas(lifeAreas, 3), [lifeAreas]);
 
   const [showCustomPicker, setShowCustomPicker] = useState(false);
 
@@ -54,12 +63,20 @@ export default function FirstGoal() {
 
   const onContinue = () => {
     if (!canContinue) return;
+    completeStep('first-goal');
     router.push('/(onboarding)/weekly-focus');
   };
 
   return (
     <OnboardingScreen step={3}>
-      <View style={styles.body}>
+      {/* Scrolls because the ideas section, the date picker and the reason
+          field together exceed one viewport on a small phone. */}
+      <ScrollView
+        style={styles.body}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.title}>Choose one thing{'\n'}worth your time.</Text>
         <Text style={styles.subtitle}>You can add two more goals later.</Text>
 
@@ -74,6 +91,25 @@ export default function FirstGoal() {
           autoCapitalize="sentences"
           returnKeyType="done"
         />
+
+        {suggestions.length > 0 && goalTitle.trim().length === 0 ? (
+          <>
+            <Text style={styles.label}>IDEAS FROM WHAT YOU CHOSE</Text>
+            <View style={styles.suggestionList}>
+              {suggestions.map((idea) => (
+                <Pressable
+                  key={idea}
+                  onPress={() => patch({ goalTitle: idea })}
+                  style={styles.suggestion}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use this idea: ${idea}`}
+                >
+                  <Text style={styles.suggestionText}>{idea}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : null}
 
         <Text style={styles.label}>TIMEFRAME</Text>
         <View style={styles.chipRow}>
@@ -153,15 +189,21 @@ export default function FirstGoal() {
           <Text style={styles.error}>Choose a date in the future.</Text>
         ) : null}
 
-        <View style={styles.spacer} />
-        <PrimaryButton label="Create my goal" onPress={onContinue} disabled={!canContinue} />
-      </View>
+        <PrimaryButton
+          label="Create my goal"
+          onPress={onContinue}
+          disabled={!canContinue}
+          style={styles.cta}
+        />
+      </ScrollView>
     </OnboardingScreen>
   );
 }
 
 const styles = StyleSheet.create({
   body: { flex: 1 },
+  scrollContent: { paddingBottom: 40 },
+  cta: { marginTop: space.xl },
   title: { ...type.title, color: theme.colors.text, marginBottom: space.xs },
   subtitle: { ...type.body, color: theme.colors.muted, marginBottom: space.xl },
   label: { ...type.label, color: theme.colors.muted, marginTop: space.md, marginBottom: space.sm },
@@ -177,6 +219,18 @@ const styles = StyleSheet.create({
     ...type.body,
   },
   inputMultiline: { minHeight: 88, paddingVertical: 14, textAlignVertical: 'top' },
+  suggestionList: { gap: space.sm },
+  suggestion: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderRadius: radius.input,
+    backgroundColor: theme.colors.raised,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  suggestionText: { ...type.small, color: theme.colors.muted },
   chipRow: { flexDirection: 'row', gap: space.sm },
   chip: {
     paddingVertical: space.md,
@@ -225,5 +279,4 @@ const styles = StyleSheet.create({
   previewValue: { ...type.heading, color: theme.colors.text },
   previewHint: { ...type.small, color: theme.colors.muted, marginTop: space.xs },
   error: { ...type.small, color: theme.colors.danger, marginTop: space.md },
-  spacer: { flex: 1 },
 });

@@ -22,6 +22,7 @@ import {
 import { SourceSerif4_400Regular_Italic } from '@expo-google-fonts/source-serif-4';
 import { theme } from '@/design/theme';
 import { useSession } from '@/store/session';
+import { resumeRoute, useOnboardingStore } from '@/store/onboarding';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -37,6 +38,9 @@ export default function RootLayout() {
   const ready = useSession((s) => s.ready);
   const refreshSession = useSession((s) => s.refresh);
   const markReady = useSession((s) => s.markReady);
+  // The persisted onboarding draft is read asynchronously; routing must not
+  // run against an empty draft or every resume starts at the intro.
+  const draftHydrated = useOnboardingStore((s) => s.hasHydrated);
 
   // Bootstrap: read the user's settings row (created by migrations) so the
   // gate below can decide where to route them. Uses the store's own refresh
@@ -60,12 +64,12 @@ export default function RootLayout() {
   }, [refreshSession, markReady]);
 
   const onLayout = useCallback(() => {
-    if ((fontsLoaded || fontsError) && ready) {
+    if ((fontsLoaded || fontsError) && ready && draftHydrated) {
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, fontsError, ready]);
+  }, [fontsLoaded, fontsError, ready, draftHydrated]);
 
-  if ((!fontsLoaded && !fontsError) || !ready) return null;
+  if ((!fontsLoaded && !fontsError) || !ready || !draftHydrated) return null;
 
   return (
     <SafeAreaProvider>
@@ -85,24 +89,28 @@ export default function RootLayout() {
 }
 
 /**
- * Redirect gate — reads the loaded settings and pushes the user into
- * onboarding if they haven't completed it yet. Runs on route changes so
- * users can't skip onboarding by manually navigating to a deep link.
+ * Redirect gate — sends anyone who has not finished setup back into it, at
+ * the step they left off rather than the beginning (doc §06: "resume at the
+ * last completed step with prior answers restored").
+ *
+ * Only acts from outside the onboarding and paywall groups, so it redirects
+ * on app entry without fighting navigation inside the flow — including the
+ * back chevron, which users are allowed to use on every step.
  */
 function OnboardingGate() {
   const router = useRouter();
   const segments = useSegments();
   const settings = useSession((s) => s.settings);
+  const hasHydrated = useOnboardingStore((s) => s.hasHydrated);
+  const lastCompletedStep = useOnboardingStore((s) => s.lastCompletedStep);
 
   useEffect(() => {
-    if (!settings) return;
-    const inOnboarding = segments[0] === '(onboarding)';
-    const inPaywall = segments[0] === '(paywall)';
-    const completed = !!settings.onboardingCompletedAt;
-    if (!completed && !inOnboarding && !inPaywall) {
-      router.replace('/(onboarding)/intro');
-    }
-  }, [settings, segments, router]);
+    if (!settings || !hasHydrated) return;
+    const group = segments[0];
+    if (group === '(onboarding)' || group === '(paywall)') return;
+    if (settings.onboardingCompletedAt) return;
+    router.replace(resumeRoute(lastCompletedStep));
+  }, [settings, hasHydrated, lastCompletedStep, segments, router]);
 
   return null;
 }

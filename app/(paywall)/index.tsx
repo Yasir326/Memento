@@ -10,7 +10,7 @@
 // success). Prices are hardcoded to the doc's launch test values; a real
 // build must load them from store product data.
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,9 +36,23 @@ export default function Paywall() {
   const [busy, setBusy] = useState(false);
   const refreshSession = useSession((s) => s.refresh);
 
-  // Last step of onboarding: both paths land on the home screen, and the
-  // free path is never worse than a dead end (doc §07 rule 5).
-  const proceed = () => router.replace('/');
+  // Marked on mount, not on choice. Dismissing by any route — trial, free,
+  // or the Android back button — has to count as shown, or the offer
+  // reappears on the next launch and turns into the nagging pattern §07's
+  // trust rules rule out.
+  useEffect(() => {
+    void (async () => {
+      await updateUserSettings({ paywallSeenAt: new Date().toISOString() });
+      await refreshSession();
+    })();
+  }, [refreshSession]);
+
+  // Raised over the home screen, so going back is the honest exit. Falls
+  // back to a replace when it was opened as the only route on the stack.
+  const proceed = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  };
 
   const onStartTrial = async () => {
     setBusy(true);

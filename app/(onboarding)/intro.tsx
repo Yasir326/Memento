@@ -8,6 +8,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useOnboardingStore } from '@/store/onboarding';
 import { OnboardingScreen } from '@/features/onboarding/OnboardingScreen';
 import { PrimaryButton } from '@/features/onboarding/PrimaryButton';
 import { BrandMark } from '@/features/onboarding/BrandMark';
@@ -17,6 +18,12 @@ import { type } from '@/design/typography';
 
 export default function Intro() {
   const router = useRouter();
+  const completeStep = useOnboardingStore((s) => s.completeStep);
+
+  const onBegin = () => {
+    completeStep('intro');
+    router.push('/(onboarding)/profile');
+  };
   return (
     <OnboardingScreen overline="MEMENTO" showBack={false}>
       <View style={styles.body}>
@@ -31,7 +38,7 @@ export default function Intro() {
         </Text>
 
         <View style={styles.spacer} />
-        <PrimaryButton label="Begin" onPress={() => router.push('/(onboarding)/profile')} />
+        <PrimaryButton label="Begin" onPress={onBegin} />
         <Text style={styles.footnote}>Private by default · Stored on your device</Text>
       </View>
     </OnboardingScreen>

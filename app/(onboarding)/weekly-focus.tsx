@@ -25,6 +25,12 @@ export default function WeeklyFocusStep() {
   const weeklyFocusText = useOnboardingStore((s) => s.weeklyFocusText);
   const goalTitle = useOnboardingStore((s) => s.goalTitle);
   const patch = useOnboardingStore((s) => s.patch);
+  const completeStep = useOnboardingStore((s) => s.completeStep);
+
+  const onContinue = () => {
+    completeStep('weekly-focus');
+    router.push('/(onboarding)/finish');
+  };
 
   const canContinue = weeklyFocusText.trim().length > 0;
 
@@ -73,7 +79,7 @@ export default function WeeklyFocusStep() {
         <View style={styles.spacer} />
         <PrimaryButton
           label="Set this week's focus"
-          onPress={() => router.push('/(onboarding)/finish')}
+          onPress={onContinue}
           disabled={!canContinue}
         />
       </View>

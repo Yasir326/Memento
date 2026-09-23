@@ -15,9 +15,32 @@ current week's focus with a countdown to the week boundary, and active
 goals with their target dates and weeks left. A Goals screen handles the
 three-active-goal limit, editing, completion and archiving.
 
+Onboarding resumes where it was interrupted, and ends on the home screen
+with the upgrade offer raised over it once.
+
 Not yet built: weekly reflection, notifications, real RevenueCat
 purchases, settings, widget. See the design doc's Section 19 "Delivery
 plan" for the intended sequence.
+
+## Onboarding flow
+
+```
+intro → profile → reveal → values → first-goal → weekly-focus → finish
+                                                                  ↓
+                                          home  ←──────────────────
+                                            ↓  (once, after a beat)
+                                         paywall → home
+```
+
+`profile`, `values`, `first-goal` and `weekly-focus` carry the "Step X of 4"
+indicator; `reveal`, `finish` and the paywall do not, per doc §06's rule that
+the reveal and the upgrade offer are not setup work.
+
+Birth date, horizon and life areas are written to SQLite as each step is
+passed. The goal and the weekly action live in the persisted onboarding
+draft until `finish` commits both together, so backing out never leaves
+orphan rows. Quitting mid-setup resumes at the next incomplete step with
+answers intact (`lastCompletedStep` in `src/domain/onboardingFlow.ts`).
 
 ## Run locally
 
@@ -91,13 +114,23 @@ src/
   date on every render, so the app is correct after being closed for a
   month with no timers to replay.
 - **Domain purity.** `src/domain/*` is deterministic and RN-free; it can be
-  unit-tested in Node without a test host.
+  unit-tested in Node without a test host. Flow rules live there rather than
+  in the store for exactly this reason — the store imports AsyncStorage.
+- **Settings cache discipline.** `useSession` caches the single
+  `user_settings` row. **Every write to that row must call
+  `useSession.refresh()`.** Skipping it leaves screens reading stale values
+  until the next cold launch; the symptom is a blank home screen and a bounce
+  back to onboarding, which looks nothing like its cause.
+- **Migrations are atomic and comment-safe.** Each runs in a transaction with
+  its version row, statements are split after stripping `--` comments (one
+  contains a semicolon), and a duplicate-column error is tolerated since
+  SQLite has no `ADD COLUMN IF NOT EXISTS`.
 
 ## What to build next (per doc)
 
 1. Weekly reflection (Section 08) — three-question review, tied to one week
 2. Local notification schedules (Section 11) — three intensity presets
-3. RevenueCat paywall (Section 07) — 7-day trial + monthly fallback
+3. RevenueCat purchases (Section 07) — the paywall UI is a stub; wire the SDK
 4. Settings (Section 05) — projection, week start, theme, export and delete
 5. Week and Today scales (Section 08) — currently placeholders
 6. Home-screen widget (Section 15) — after the core app is stable

@@ -44,6 +44,7 @@ export default function Profile() {
   const patch = useOnboardingStore((s) => s.patch);
 
   const refreshSession = useSession((s) => s.refresh);
+  const completeStep = useOnboardingStore((s) => s.completeStep);
   const [showPicker, setShowPicker] = useState(Platform.OS === 'ios');
   const [saving, setSaving] = useState(false);
 
@@ -65,6 +66,7 @@ export default function Profile() {
       await updateUserSettings({ birthDate, projectedAge });
       // Every write to user_settings refreshes the cache — see session.ts.
       await refreshSession();
+      completeStep('profile');
       router.push('/(onboarding)/reveal');
     } finally {
       setSaving(false);

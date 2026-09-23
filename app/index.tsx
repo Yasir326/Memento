@@ -15,8 +15,8 @@
 // opened for several weeks; derive the current state rather than replaying
 // timers").
 
-import React, { useCallback, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { LifeGrid, type Scale } from '@/features/time/LifeGrid';
@@ -33,6 +33,7 @@ import { getGoalTimeline } from '@/domain/goalTimeline';
 import { toISODate } from '@/domain/dates';
 import { listActiveGoals, MAX_ACTIVE_GOALS, type Goal } from '@/repositories/goals';
 import { getFocusForWeek, setFocusForWeek, type WeeklyFocus } from '@/repositories/weeklyFocus';
+import { updateUserSettings } from '@/repositories/userSettings';
 import { useSession } from '@/store/session';
 import { theme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
@@ -41,6 +42,7 @@ import { type } from '@/design/typography';
 export default function TimeHome() {
   const router = useRouter();
   const settings = useSession((s) => s.settings);
+  const refreshSession = useSession((s) => s.refresh);
   const weekStartsOn = settings?.weekStartsOn ?? 1;
 
   const [scale, setScale] = useState<Scale>('life');
@@ -114,6 +116,34 @@ export default function TimeHome() {
     [goals, now, weekStartsOn],
   );
 
+  // ─── The upgrade offer, raised once from here ───
+  // Doc §06 steps 7-8: onboarding ends on this screen, then Pro is offered.
+  // Showing it a beat after the screen settles means the first thing a new
+  // user sees is their own grid, not a price — and `paywallSeenAt` is
+  // written by the paywall itself on mount, so this cannot fire twice.
+  const paywallRaised = useRef(false);
+  useEffect(() => {
+    if (paywallRaised.current) return;
+    if (!settings?.onboardingCompletedAt) return;
+    if (settings.paywallSeenAt || settings.isPro) return;
+    paywallRaised.current = true;
+    const t = setTimeout(() => router.push('/(paywall)'), 900);
+    return () => clearTimeout(t);
+  }, [
+    settings?.onboardingCompletedAt,
+    settings?.paywallSeenAt,
+    settings?.isPro,
+    router,
+  ]);
+
+  const showIntro =
+    !!settings?.onboardingCompletedAt && !settings?.homeIntroSeenAt;
+
+  const dismissIntro = useCallback(async () => {
+    await updateUserSettings({ homeIntroSeenAt: new Date().toISOString() });
+    await refreshSession();
+  }, [refreshSession]);
+
   const focusGoalTitle = useMemo(
     () => goals.find((g) => g.id === focus?.goalId)?.title ?? null,
     [goals, focus?.goalId],
@@ -179,6 +209,30 @@ export default function TimeHome() {
         <Text style={styles.legend}>Each dot is one week</Text>
 
         <ScaleSwitcher value={scale} onChange={setScale} />
+
+        {/* ─── First run: the weekly loop, explained in place ───
+            Doc §06 step 7 asks the last onboarding beat to "show the
+            complete home screen and explain the weekly loop". Explaining it
+            here, attached to the card it describes, beats a separate screen
+            the user taps past to get somewhere. */}
+        {showIntro ? (
+          <View style={styles.intro}>
+            <Text style={styles.introTitle}>How this works</Text>
+            <Text style={styles.introBody}>
+              Each dot is one week. Choose one small action for the week
+              ahead, and when it ends Memento asks how it went — thirty
+              seconds, no judgement. Then the grid moves on.
+            </Text>
+            <Pressable
+              onPress={dismissIntro}
+              accessibilityRole="button"
+              accessibilityLabel="Got it, hide this"
+              style={({ pressed }) => [styles.introBtn, pressed && styles.introBtnPressed]}
+            >
+              <Text style={styles.introBtnText}>Got it</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* ─── This week ─── */}
         <ThisWeekCard
@@ -272,6 +326,19 @@ const styles = StyleSheet.create({
   },
   sectionLabel: { ...type.label, color: theme.colors.muted },
   sectionMeta: { ...type.small, color: theme.colors.muted },
+
+  intro: {
+    borderRadius: radius.control,
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+    padding: size.cardPadding,
+    gap: space.sm,
+  },
+  introTitle: { ...type.label, color: theme.colors.accent },
+  introBody: { ...type.small, color: theme.colors.text, lineHeight: 22 },
+  introBtn: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  introBtnPressed: { opacity: 0.7 },
+  introBtnText: { ...type.small, color: theme.colors.accent, fontWeight: '600' },
 
   empty: {
     borderRadius: radius.control,

@@ -15,19 +15,8 @@ import { type } from '@/design/typography';
 import { useOnboardingStore } from '@/store/onboarding';
 import { updateUserSettings } from '@/repositories/userSettings';
 import { useSession } from '@/store/session';
-
-const AREAS = [
-  'Family',
-  'Health',
-  'Faith',
-  'Create',
-  'Career',
-  'Adventure',
-  'Learning',
-  'Community',
-  'Financial freedom',
-  'Other',
-] as const;
+// One source of truth with the goal ideas each area unlocks on the next step.
+import { LIFE_AREAS as AREAS } from '@/content/goalSuggestions';
 
 const MAX_AREAS = 3;
 
@@ -36,6 +25,7 @@ export default function Values() {
   const refreshSession = useSession((s) => s.refresh);
   const lifeAreas = useOnboardingStore((s) => s.lifeAreas);
   const patch = useOnboardingStore((s) => s.patch);
+  const completeStep = useOnboardingStore((s) => s.completeStep);
 
   const toggle = (area: string) => {
     if (lifeAreas.includes(area)) {
@@ -48,6 +38,7 @@ export default function Values() {
   const onContinue = async () => {
     await updateUserSettings({ lifeAreas: lifeAreas.length > 0 ? lifeAreas : null });
     await refreshSession();
+    completeStep('values');
     router.push('/(onboarding)/first-goal');
   };
 
@@ -55,6 +46,7 @@ export default function Values() {
     patch({ lifeAreas: [] });
     await updateUserSettings({ lifeAreas: null });
     await refreshSession();
+    completeStep('values');
     router.push('/(onboarding)/first-goal');
   };
 
